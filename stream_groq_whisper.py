@@ -1,13 +1,38 @@
+import datetime
 import ffmpeg
 import threading
 import queue
+import os
 
 from groq import Groq
+from peewee import (
+    CharField,
+    DateField,
+    Model,
+    SqliteDatabase,
+)
 
 
 client = Groq()
 
 audio_queue = queue.Queue()
+
+database_name = os.environ.get("DBNAME", "transcripts.db")
+
+db = SqliteDatabase(database_name)
+
+
+class Transcript(Model):
+    timestamp = DateField(default=datetime.datetime.now())
+    text = CharField(null=False)
+    frequency = CharField(null=True)
+
+    class Meta:
+        database = db
+
+
+db.connect()
+db.create_tables([Transcript])
 
 # 30 seconds of 16kHZ:
 # sample_rate(16000 samples/sec) * 30 sec * 2 bytes/sample
@@ -58,10 +83,16 @@ def process_audio(in_data, index=0):
         language="es",
     )
 
-    if transcription.text != " Gracias." and \
-       transcription.text != " ¡Gracias!" and \
-       transcription.text != " Gracias por ver el video.":
+    if transcription.text not in [
+       " Gracias.",
+       " ¡Gracias!",
+       " Gracias por ver el video.",
+       " ¡Suscríbete al canal!"]:
         print(transcription.text, flush=True)
+        t = Transcript.create(
+            text=transcription.text,
+        )
+        t.save()
 
 
 def run_ffmpeg():
