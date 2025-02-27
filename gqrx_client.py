@@ -38,7 +38,7 @@ def close():
     connected = False
     logger.info("Connection closed")
 
-def send_command(command: str) -> str:
+def send(command: str) -> str:
     global connected
     if not connected:
         connect()
@@ -52,7 +52,8 @@ def send_command(command: str) -> str:
     try:
         sock.sendall(command.encode('utf-8'))
         response = sock.recv(1024).decode('utf-8')
-        return response
+        logger.info(f"Response: {response.strip()}")
+        return response.strip()
     except socket.timeout:
         logger.error("Socket timeout - no response received")
         raise
@@ -60,10 +61,3 @@ def send_command(command: str) -> str:
         logger.error(f"Socket error: {e}")
         connected = False
         raise
-
-try:
-    # Get current frequency
-    response = send_command("f")
-    logger.info(f"Response: {response.strip()}")
-finally:
-    close()
