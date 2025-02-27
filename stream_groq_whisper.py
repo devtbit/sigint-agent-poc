@@ -4,36 +4,29 @@ import threading
 import queue
 import os
 import time
+import logging
 
 from groq import Groq
-from peewee import (
-    CharField,
-    DateTimeField,
-    Model,
-    SqliteDatabase,
-)
+import database  # Import the database module
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("sigint_agent.log")
+    ]
+)
+logger = logging.getLogger("sigint_audio_stream")
 
 client = Groq()
 
 audio_queue = queue.Queue()
 
-database_name = os.environ.get("DBNAME", "transcripts.db")
-
-db = SqliteDatabase(database_name)
-
-
-class Transcript(Model):
-    timestamp = DateTimeField(default=datetime.datetime.now())
-    text = CharField(null=False)
-    frequency = CharField(null=True)
-
-    class Meta:
-        database = db
-
-
-db.connect()
-db.create_tables([Transcript])
+# Initialize the database using our new module
+database.initialize_db()
+logger.info("Database initialized")
 
 # 30 seconds of 16kHZ:
 # sample_rate(16000 samples/sec) * 30 sec * 2 bytes/sample
@@ -41,20 +34,25 @@ CHUNK_SIZE = 10 * 16000 * 2
 
 
 def audio_worker():
+    logger.info("Audio worker thread started")
+    processed_chunks = 0
     while True:
         item = audio_queue.get()
         if item is None:
             audio_queue.task_done()
+            logger.info(f"Audio worker thread stopping, processed {processed_chunks} chunks")
             break
 
         # Unpack the item to include capture_time
         in_data, index, capture_time = item
         process_audio(in_data, index, capture_time)
+        processed_chunks += 1
         audio_queue.task_done()
 
 
 def process_audio(in_data, index=0, capture_time=None):
     # Process the audio data here
+    logger.debug(f"Processing audio chunk {index}, captured at {capture_time}")
     try:
         wav_bytes, _ = (
             ffmpeg.input(
@@ -76,9 +74,10 @@ def process_audio(in_data, index=0, capture_time=None):
             )
         )
     except ffmpeg.Error as e:
-        print(f"ffmpeg error during chunk->wav: {e.stderr.decode()}")
+        logger.error(f"ffmpeg error during chunk->wav: {e.stderr.decode()}")
         return
 
+    logger.debug(f"Sending chunk {index} to Groq Whisper API")
     transcription = client.audio.transcriptions.create(
         file=(f"chunk_{index}.wav", wav_bytes),
         model="whisper-large-v3-turbo",
@@ -92,15 +91,20 @@ def process_audio(in_data, index=0, capture_time=None):
        " ¡Gracias!",
        " Gracias por ver el video.",
        " ¡Suscríbete al canal!"]:
-        print(transcription.text, flush=True)
-        t = Transcript.create(
-            text=transcription.text,
-            timestamp=capture_time,
-        )
-        t.save()
+        logger.info(f"Transcription: {transcription.text}")
+        # Save transcript to database
+        try:
+            database.save_transcript(
+                text=transcription.text,
+                timestamp=capture_time,
+            )
+            logger.debug(f"Saved transcript to database: {transcription.text[:30]}...")
+        except Exception as e:
+            logger.error(f"Failed to save transcript to database: {e}")
 
 
 def run_ffmpeg():
+    logger.info("Starting FFmpeg processing pipeline")
     worker_thread = threading.Thread(target=audio_worker,
                                      daemon=True)
     worker_thread.start()
@@ -109,6 +113,7 @@ def run_ffmpeg():
     sessions_dir = "sessions"
     if not os.path.exists(sessions_dir):
         os.makedirs(sessions_dir)
+        logger.info(f"Created sessions directory: {sessions_dir}")
 
     # Generate timestamp for the session
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -116,8 +121,13 @@ def run_ffmpeg():
     # Create filenames with timestamp prefix
     output_filename = os.path.join(sessions_dir, f"{timestamp}_output.wav")
     resampled_filename = os.path.join(sessions_dir, f"{timestamp}_resampled.wav")
+    
+    logger.info(f"Recording session: {timestamp}")
+    logger.info(f"Saving original audio to: {output_filename}")
+    logger.info(f"Saving resampled audio to: {resampled_filename}")
 
     # Define the input stream
+    logger.info("Setting up FFmpeg UDP input stream on port 7355")
     input_stream = ffmpeg.input(
         'udp://@:7355',
         format='s16le',
@@ -159,6 +169,7 @@ def run_ffmpeg():
     )
 
     # Merge the two outputs and run asynchronously
+    logger.info("Starting FFmpeg process")
     process = ffmpeg.merge_outputs(output1, output2, output3).run_async(
         pipe_stdout=True,
         pipe_stderr=True
@@ -168,13 +179,15 @@ def run_ffmpeg():
     chunk_index = 0
     # Store the start time of the current chunk being accumulated
     current_chunk_start_time = datetime.datetime.now()
-
+    
+    logger.info("Starting to process audio stream")
     # Read and process audio data from stdout
     try:
         while True:
             in_bytes = process.stdout.read(2)
             if not in_bytes:
                 if accumulated:
+                    logger.debug(f"Processing final accumulated chunk ({len(accumulated)} bytes)")
                     audio_queue.put((accumulated, chunk_index, current_chunk_start_time))
                 break
 
@@ -184,21 +197,27 @@ def run_ffmpeg():
                 chunk = accumulated[:CHUNK_SIZE]
                 # Pass the capture time along with the audio data
                 audio_queue.put((chunk, chunk_index, current_chunk_start_time))
+                logger.debug(f"Queued chunk {chunk_index} for processing, size: {len(chunk)} bytes")
                 chunk_index += 1
                 accumulated = accumulated[CHUNK_SIZE:]
                 # Reset the start time for the next chunk
                 current_chunk_start_time = datetime.datetime.now()
     except Exception as e:
-        print(f"Error occurred: {e}")
+        logger.error(f"Error occurred during FFmpeg processing: {e}", exc_info=True)
     finally:
+        logger.info("Cleaning up FFmpeg process")
         process.stdout.close()
         process.stderr.close()
         process.wait()
 
+        logger.info("Stopping audio worker thread")
         audio_queue.put(None)
         worker_thread.join()
+        logger.info(f"Processing completed, processed {chunk_index} chunks")
 
 
 if __name__ == '__main__':
+    logger.info("SIGINT Audio Stream starting up")
     # Run the ffmpeg process in a separate thread
     run_ffmpeg()
+    logger.info("SIGINT Audio Stream shutting down")
