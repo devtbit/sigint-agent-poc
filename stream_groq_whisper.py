@@ -7,7 +7,8 @@ import time
 import logging
 
 from groq import Groq
-import database  # Import the database module
+import database
+import gqrx_client as gqrx
 
 # Configure logging
 logging.basicConfig(
@@ -52,7 +53,8 @@ def audio_worker():
 
 def process_audio(in_data, index=0, capture_time=None):
     # Process the audio data here
-    logger.debug(f"Processing audio chunk {index}, captured at {capture_time}")
+    frequency = database.get_current_session().frequency
+    logger.debug(f"Processing audio chunk {index}, captured at {capture_time}, frequency: {frequency}")
     try:
         wav_bytes, _ = (
             ffmpeg.input(
@@ -96,6 +98,7 @@ def process_audio(in_data, index=0, capture_time=None):
         try:
             database.save_transcript(
                 text=transcription.text,
+                frequency=frequency,
                 timestamp=capture_time,
             )
             logger.debug(f"Saved transcript to database: {transcription.text[:30]}...")
@@ -218,6 +221,19 @@ def run_ffmpeg():
 
 if __name__ == '__main__':
     logger.info("SIGINT Audio Stream starting up")
+    frequency = None
+    try:
+        logger.info("Getting current frequency from GQRX")
+        frequency = gqrx.send("f")
+    except Exception as e:
+        logger.error(f"Error getting current frequency: {e}")
+    finally:
+        gqrx.close()
+
+    if frequency:
+        database.save_session(frequency)
+        logger.info(f"Initialized session with frequency: {frequency}")
+
     # Run the ffmpeg process in a separate thread
     run_ffmpeg()
     logger.info("SIGINT Audio Stream shutting down")

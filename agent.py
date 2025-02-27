@@ -2,6 +2,7 @@ from groq import Groq
 import json
 import os
 
+from database import save_session
 import gqrx_client as gqrx
 
 groq = Groq()
@@ -31,6 +32,18 @@ tools = [
                 "required": ["frequency"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_current_frequency",
+            "description": "Get the current frequency from the GQRX receiver.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
     }
 ]
 
@@ -43,11 +56,25 @@ def set_frequency(frequency: int):
     try:
         response = gqrx.send(f"F {frequency}")
         result = json.dumps({"result": response})
+        save_session(frequency)
     except Exception as e:
         result = json.dumps({"error": str(e)})
     finally:
         gqrx.close()
 
+    return result
+
+
+def get_current_frequency():
+    """Get the current frequency from the GQRX receiver."""
+    result = None
+    try:
+        response = gqrx.send("f")
+        result = json.dumps({"result": response})
+    except Exception as e:
+        result = json.dumps({"error": str(e)})
+    finally:
+        gqrx.close()
     return result
 
 
@@ -65,7 +92,8 @@ def run(message: str):
     tool_calls = response_message.tool_calls
     if tool_calls:
         available_tools = {
-            "set_frequency": set_frequency
+            "set_frequency": set_frequency,
+            "get_current_frequency": get_current_frequency
         }
 
         messages.append(response_message)
@@ -98,4 +126,4 @@ def run(message: str):
     return response_message.content
 
 if __name__ == "__main__":
-    print(run("Set the frequency to 457.202 MHz."))
+    print(run("What is the current frequency?"))
