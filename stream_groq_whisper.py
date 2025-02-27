@@ -3,11 +3,12 @@ import ffmpeg
 import threading
 import queue
 import os
+import time
 
 from groq import Groq
 from peewee import (
     CharField,
-    DateField,
+    DateTimeField,
     Model,
     SqliteDatabase,
 )
@@ -23,7 +24,7 @@ db = SqliteDatabase(database_name)
 
 
 class Transcript(Model):
-    timestamp = DateField(default=datetime.datetime.now())
+    timestamp = DateTimeField(default=datetime.datetime.now())
     text = CharField(null=False)
     frequency = CharField(null=True)
 
@@ -46,12 +47,13 @@ def audio_worker():
             audio_queue.task_done()
             break
 
-        in_data, index = item
-        process_audio(in_data, index)
+        # Unpack the item to include capture_time
+        in_data, index, capture_time = item
+        process_audio(in_data, index, capture_time)
         audio_queue.task_done()
 
 
-def process_audio(in_data, index=0):
+def process_audio(in_data, index=0, capture_time=None):
     # Process the audio data here
     try:
         wav_bytes, _ = (
@@ -83,6 +85,8 @@ def process_audio(in_data, index=0):
         language="es",
     )
 
+    # Weird edge case, background noise detected as these phrases
+    # in Spanish communications.
     if transcription.text not in [
        " Gracias.",
        " ¡Gracias!",
@@ -91,6 +95,7 @@ def process_audio(in_data, index=0):
         print(transcription.text, flush=True)
         t = Transcript.create(
             text=transcription.text,
+            timestamp=capture_time,
         )
         t.save()
 
@@ -149,6 +154,8 @@ def run_ffmpeg():
 
     accumulated = b''
     chunk_index = 0
+    # Store the start time of the current chunk being accumulated
+    current_chunk_start_time = datetime.datetime.now()
 
     # Read and process audio data from stdout
     try:
@@ -156,16 +163,19 @@ def run_ffmpeg():
             in_bytes = process.stdout.read(2)
             if not in_bytes:
                 if accumulated:
-                    audio_queue.put((accumulated, chunk_index))
+                    audio_queue.put((accumulated, chunk_index, current_chunk_start_time))
                 break
 
             accumulated += in_bytes
 
             while len(accumulated) >= CHUNK_SIZE:
                 chunk = accumulated[:CHUNK_SIZE]
-                audio_queue.put((chunk, chunk_index))
+                # Pass the capture time along with the audio data
+                audio_queue.put((chunk, chunk_index, current_chunk_start_time))
                 chunk_index += 1
                 accumulated = accumulated[CHUNK_SIZE:]
+                # Reset the start time for the next chunk
+                current_chunk_start_time = datetime.datetime.now()
     except Exception as e:
         print(f"Error occurred: {e}")
     finally:
