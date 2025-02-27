@@ -5,3 +5,4 @@ env.sh
 *.db
 __pycache__
 *.swp
+sessions/

@@ -105,6 +105,18 @@ def run_ffmpeg():
                                      daemon=True)
     worker_thread.start()
 
+    # Create sessions directory if it doesn't exist
+    sessions_dir = "sessions"
+    if not os.path.exists(sessions_dir):
+        os.makedirs(sessions_dir)
+
+    # Generate timestamp for the session
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # Create filenames with timestamp prefix
+    output_filename = os.path.join(sessions_dir, f"{timestamp}_output.wav")
+    resampled_filename = os.path.join(sessions_dir, f"{timestamp}_resampled.wav")
+
     # Define the input stream
     input_stream = ffmpeg.input(
         'udp://@:7355',
@@ -130,11 +142,11 @@ def run_ffmpeg():
     multi_stream_to_file = multi_resampled_stream.stream(0)
     multi_stream_to_process = multi_resampled_stream[1]
 
-    # Define the first output to save the original audio to 'output.wav'
-    output1 = ffmpeg.output(stream_to_file, 'output.wav')
+    # Define the first output to save the original audio with timestamp prefix
+    output1 = ffmpeg.output(stream_to_file, output_filename)
 
-    # Define the second output to save the resampled audio to 'resampled.wav'
-    output2 = ffmpeg.output(multi_stream_to_file, 'resampled.wav')
+    # Define the second output to save the resampled audio with timestamp prefix
+    output2 = ffmpeg.output(multi_stream_to_file, resampled_filename)
 
     # Define the second output to pipe (stdout) the resampled audio
     output3 = ffmpeg.output(
