@@ -32,7 +32,8 @@ tools = [
                 "properties": {
                     "frequency": {
                         "type": "integer",
-                        "description": "The frequency to set the GQRX receiver to in Hz."
+                        "description": "The frequency to set the GQRX receiver"
+                                       " to in Hz."
                     }
                 },
                 "required": ["frequency"]
@@ -64,7 +65,10 @@ def set_frequency(frequency: int):
     try:
         response = gqrx.send(f"F {frequency}")
         result = json.dumps({"result": response})
-        logger.info(f"Successfully set frequency to {frequency} Hz. Response: {response}")
+        logger.info(
+            f"Successfully set frequency to {frequency} Hz."
+            f" Response: {response}"
+        )
         save_session(frequency)
         logger.debug(f"Saved frequency {frequency} to session database")
     except Exception as e:
@@ -93,9 +97,10 @@ def get_current_frequency():
 
 
 def run(message: str):
-    logger.info(f"Processing message: {message[:50]}..." if len(message) > 50 else f"Processing message: {message}")
+    msg_preview = message[:50] + "..." if len(message) > 50 else message
+    logger.info(f"Processing message: {msg_preview}")
     messages.append({"role": "user", "content": message})
-    
+
     logger.debug("Sending request to GROQ API")
     response = groq.chat.completions.create(
         model=model,
@@ -104,7 +109,7 @@ def run(message: str):
         tool_choice="auto",
         max_tokens=4096,
     )
-    
+
     response_message = response.choices[0].message
     messages.append(response_message)
 
@@ -131,7 +136,7 @@ def run(message: str):
                     "name": tool_name
                 }
             )
-        
+
         logger.debug("Sending follow-up request to GROQ API")
         response = groq.chat.completions.create(
             model=model,
@@ -144,6 +149,6 @@ def run(message: str):
         logger.info("Received final response from GROQ API")
 
         return response_message.content
-    
+
     logger.info("Received direct response from GROQ API (no tool calls)")
     return response_message.content

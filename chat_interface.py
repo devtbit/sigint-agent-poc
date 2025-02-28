@@ -13,6 +13,7 @@ logger = logging.getLogger("chat_interface")
 # Store old_settings as a global variable so it can be accessed for cleanup
 old_settings = None
 
+
 def reset_terminal():
     """Reset terminal settings to their original state.
     This function is meant to be called during application cleanup."""
@@ -28,6 +29,7 @@ def reset_terminal():
         except Exception as e:
             logger.error(f"Error resetting terminal: {e}")
 
+
 def run():
     """Run the chat-like interface in the terminal."""
     global old_settings
@@ -35,25 +37,25 @@ def run():
     logger.info("Starting chat interface")
 
     sigint_ascii = """
-============================================================       
- .d8888b.  8888888 .d8888b.  8888888 888b    888 88888888888 
-d88P  Y88b   888  d88P  Y88b   888   8888b   888     888     
-Y88b.        888  888    888   888   88888b  888     888     
- "Y888b.     888  888          888   888Y88b 888     888     
-    "Y88b.   888  888  88888   888   888 Y88b888     888     
-      "888   888  888    888   888   888  Y88888     888     
-Y88b  d88P   888  Y88b  d88P   888   888   Y8888     888     
- "Y8888P"  8888888 "Y8888P"  8888888 888    Y888     888     
-                                                             
-       d8888  .d8888b.  8888888888 888b    888 88888888888    
-      d88888 d88P  Y88b 888        8888b   888     888        
-     d88P888 888    888 888        88888b  888     888        
-    d88P 888 888        8888888    888Y88b 888     888        
-   d88P  888 888  88888 888        888 Y88b888     888        
-  d88P   888 888    888 888        888  Y88888     888        
- d8888888888 Y88b  d88P 888        888   Y8888     888        
-d88P     888  "Y8888P"  8888888888 888    Y888     888 
-============================================================       
+============================================================
+ .d8888b.  8888888 .d8888b.  8888888 888b    888 88888888888
+d88P  Y88b   888  d88P  Y88b   888   8888b   888     888
+Y88b.        888  888    888   888   88888b  888     888
+ "Y888b.     888  888          888   888Y88b 888     888
+    "Y88b.   888  888  88888   888   888 Y88b888     888
+      "888   888  888    888   888   888  Y88888     888
+Y88b  d88P   888  Y88b  d88P   888   888   Y8888     888
+ "Y8888P"  8888888 "Y8888P"  8888888 888    Y888     888
+
+       d8888  .d8888b.  8888888888 888b    888 88888888888
+      d88888 d88P  Y88b 888        8888b   888     888
+     d88P888 888    888 888        88888b  888     888
+    d88P 888 888        8888888    888Y88b 888     888
+   d88P  888 888  88888 888        888 Y88b888     888
+  d88P   888 888    888 888        888  Y88888     888
+ d8888888888 Y88b  d88P 888        888   Y8888     888
+d88P     888  "Y8888P"  8888888888 888    Y888     888
+============================================================
                                                       v0.1.0
 """
     print(sigint_ascii)
@@ -122,4 +124,4 @@ d88P     888  "Y8888P"  8888888888 888    Y888     888
         print(f"\nAn error occurred: {e}")
     finally:
         # Restore terminal settings
-        reset_terminal() 
+        reset_terminal()

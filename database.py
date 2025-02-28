@@ -63,7 +63,8 @@ def save_transcript(text, frequency, timestamp=None):
     Returns:
         Transcript: The saved transcript instance
     """
-    logger.debug(f"Saving transcript: {text[:30]}..." if len(text) > 30 else f"Saving transcript: {text}")
+    msg_preview = text[:30] + "..." if len(text) > 30 else text
+    logger.debug(f"Saving transcript: {msg_preview}")
     t = Transcript.create(
         text=text,
         timestamp=timestamp or datetime.datetime.now(),
@@ -83,7 +84,7 @@ def save_session(frequency):
         Session: The created session
     """
     logger.info(f"Creating new session with frequency: {frequency}")
-    Session.update(is_active=False).where(Session.is_active == True).execute()
+    Session.update(is_active=False).where(Session.is_active).execute()
     s = Session.create(frequency=frequency)
     s.save()
     return s
@@ -99,8 +100,8 @@ def get_current_session():
         DoesNotExist: If no active session exists
     """
     try:
-        return Session.get(Session.is_active == True)
-    except DoesNotExist as e:
+        return Session.get(Session.is_active)
+    except DoesNotExist:
         logger.warning("No active session found in database")
         # Create a default session
         return save_session("unknown")

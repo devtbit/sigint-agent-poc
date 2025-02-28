@@ -3,13 +3,12 @@ import ffmpeg
 import threading
 import queue
 import os
-import time
 import logging
 
 from groq import Groq
 import database
 
-# Configure logging - don't set handlers here since app.py already configures them
+# Configure logging
 logger = logging.getLogger("sigint_audio_stream")
 
 client = Groq()
@@ -28,7 +27,9 @@ def audio_worker():
         item = audio_queue.get()
         if item is None:
             audio_queue.task_done()
-            logger.info(f"Audio worker thread stopping, processed {processed_chunks} chunks")
+            logger.info(
+                "Audio worker thread stopping, "
+                f"processed {processed_chunks} chunks")
             break
 
         # Unpack the item to include capture_time
@@ -41,7 +42,9 @@ def audio_worker():
 def process_audio(in_data, index=0, capture_time=None):
     # Process the audio data here
     frequency = database.get_current_session().frequency
-    logger.debug(f"Processing audio chunk {index}, captured at {capture_time}, frequency: {frequency}")
+    logger.debug(
+        f"Processing audio chunk {index}, captured at {capture_time}, "
+        f"frequency: {frequency}")
     try:
         wav_bytes, _ = (
             ffmpeg.input(
@@ -88,7 +91,10 @@ def process_audio(in_data, index=0, capture_time=None):
                 frequency=frequency,
                 timestamp=capture_time,
             )
-            logger.debug(f"Saved transcript to database: {transcription.text[:30]}...")
+
+            logger.debug(
+                "Saved transcript to database: "
+                f"{transcription.text[:30]}...")
         except Exception as e:
             logger.error(f"Failed to save transcript to database: {e}")
 
@@ -96,6 +102,7 @@ def process_audio(in_data, index=0, capture_time=None):
 # Global variable to track the audio stream thread
 audio_stream_thread = None
 ffmpeg_process = None
+
 
 def run_audio_stream():
     """Main function to run the audio stream processing in a background thread.
@@ -105,8 +112,9 @@ def run_audio_stream():
     # Create and start the thread if it doesn't exist already
     if audio_stream_thread is None or not audio_stream_thread.is_alive():
         audio_stream_thread = threading.Thread(
-            target=run_ffmpeg, 
-            daemon=True,  # Set as daemon so it exits when the main thread exits
+            target=run_ffmpeg,
+            # Set as daemon so it exits when the main thread exits
+            daemon=True,
             name="AudioStreamThread"
         )
         audio_stream_thread.start()
@@ -174,8 +182,9 @@ def run_ffmpeg():
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # Create filename with timestamp prefix (only resampled audio)
-    resampled_filename = os.path.join(sessions_dir, f"{timestamp}_resampled.wav")
-    
+    resampled_filename = os.path.join(
+        sessions_dir, f"{timestamp}_resampled.wav")
+
     logger.info(f"Recording session: {timestamp}")
     logger.info(f"Saving resampled audio to: {resampled_filename}")
 
@@ -194,7 +203,7 @@ def run_ffmpeg():
         resampler='soxr',
         sample_rate='16000')
 
-    # Split the resampled stream 
+    # Split the resampled stream
     split_resampled_stream = resampled_stream.filter_multi_output(
         'asplit', 2)
     stream_to_file = split_resampled_stream.stream(0)
@@ -224,7 +233,7 @@ def run_ffmpeg():
     chunk_index = 0
     # Store the start time of the current chunk being accumulated
     current_chunk_start_time = datetime.datetime.now()
-    
+
     logger.info("Starting to process audio stream")
     # Read and process audio data from stdout
     try:
@@ -232,8 +241,13 @@ def run_ffmpeg():
             in_bytes = ffmpeg_process.stdout.read(2)
             if not in_bytes:
                 if accumulated:
-                    logger.debug(f"Processing final accumulated chunk ({len(accumulated)} bytes)")
-                    audio_queue.put((accumulated, chunk_index, current_chunk_start_time))
+                    logger.debug(
+                        "Processing final accumulated chunk "
+                        f"({len(accumulated)} bytes)")
+                    audio_queue.put((
+                        accumulated,
+                        chunk_index,
+                        current_chunk_start_time))
                 break
 
             accumulated += in_bytes
@@ -242,13 +256,17 @@ def run_ffmpeg():
                 chunk = accumulated[:CHUNK_SIZE]
                 # Pass the capture time along with the audio data
                 audio_queue.put((chunk, chunk_index, current_chunk_start_time))
-                logger.debug(f"Queued chunk {chunk_index} for processing, size: {len(chunk)} bytes")
+                logger.debug(
+                    f"Queued chunk {chunk_index} for processing, "
+                    f"size: {len(chunk)} bytes")
                 chunk_index += 1
                 accumulated = accumulated[CHUNK_SIZE:]
                 # Reset the start time for the next chunk
                 current_chunk_start_time = datetime.datetime.now()
     except Exception as e:
-        logger.error(f"Error occurred during FFmpeg processing: {e}", exc_info=True)
+        logger.error(
+            "Error occurred during FFmpeg processing: "
+            f"{e}", exc_info=True)
     finally:
         logger.info("Cleaning up FFmpeg process")
         if ffmpeg_process:

@@ -1,4 +1,3 @@
-import threading
 import logging
 import sys
 import os
@@ -12,7 +11,8 @@ import gqrx_client as gqrx
 import chat_interface
 import stream_groq_whisper
 
-# Configure logging - do this before any other imports that might configure logging
+# Configure logging - do this before any other imports that might
+# configure logging
 # First, remove all existing handlers to ensure clean configuration
 for handler in logging.root.handlers[:]:
     logging.root.removeHandler(handler)
@@ -28,21 +28,23 @@ log_filename = os.path.join(logs_dir, f"{timestamp}_sigint_agent.log")
 
 # Configure a file handler
 file_handler = logging.FileHandler(log_filename)
-file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+file_handler.setFormatter(
+    logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
 
 # Configure the root logger
 logging.root.setLevel(logging.INFO)
 logging.root.addHandler(file_handler)
-
-# Import from agent after logging is configured
-from agent import run as run_agent
 
 logger = logging.getLogger("sigint_app")
 logger.info(f"Logging to: {log_filename}")
 
 
 def initialize_system():
-    """Initialize the system by setting up the database and getting the current frequency."""
+    """
+    Initialize the system by setting up the database
+    and getting the current frequency.
+    """
     logger.info("Initializing system")
 
     # Initialize database
@@ -63,7 +65,8 @@ def initialize_system():
         database.save_session(frequency)
         logger.info(f"Initialized session with frequency: {frequency}")
     else:
-        logger.warning("Failed to get frequency, session initialized without frequency")
+        logger.warning(
+            "Failed to get frequency, session initialized without frequency")
 
 
 def cleanup():
@@ -103,7 +106,7 @@ def main():
 
         # Start the audio stream processing in a background thread
         logger.info("Starting audio stream processing")
-        audio_thread = stream_groq_whisper.run_audio_stream()
+        stream_groq_whisper.run_audio_stream()
         logger.info("Audio stream processing started")
 
         # Run the chat interface (main thread)

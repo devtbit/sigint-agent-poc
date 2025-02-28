@@ -33,6 +33,7 @@ def close():
     connected = False
     logger.info("Connection closed")
 
+
 def send(command: str) -> str:
     global connected, sock
     if not connected:
@@ -43,7 +44,7 @@ def send(command: str) -> str:
     # Ensure command ends with newline
     if not command.endswith('\n'):
         command += '\n'
-    
+
     try:
         sock.sendall(command.encode('utf-8'))
         response = sock.recv(1024).decode('utf-8')
