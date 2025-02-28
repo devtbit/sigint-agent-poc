@@ -10,8 +10,28 @@ from agent import run as run_agent
 
 logger = logging.getLogger("chat_interface")
 
+# Store old_settings as a global variable so it can be accessed for cleanup
+old_settings = None
+
+def reset_terminal():
+    """Reset terminal settings to their original state.
+    This function is meant to be called during application cleanup."""
+    global old_settings
+
+    if old_settings:
+        try:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+            logger.info("Terminal settings have been restored")
+            # Write a newline to ensure cursor position is reset
+            sys.stdout.write('\n')
+            sys.stdout.flush()
+        except Exception as e:
+            logger.error(f"Error resetting terminal: {e}")
+
 def run():
     """Run the chat-like interface in the terminal."""
+    global old_settings
+
     logger.info("Starting chat interface")
 
     sigint_ascii = """
@@ -102,4 +122,4 @@ d88P     888  "Y8888P"  8888888888 888    Y888     888
         print(f"\nAn error occurred: {e}")
     finally:
         # Restore terminal settings
-        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings) 
+        reset_terminal() 

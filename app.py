@@ -2,11 +2,14 @@ import threading
 import logging
 import sys
 import os
+import atexit
+import time
 
 # Import modules from our application
 import database
 import gqrx_client as gqrx
 import chat_interface
+import stream_groq_whisper
 
 # Configure logging - do this before any other imports that might configure logging
 # First, remove all existing handlers to ensure clean configuration
@@ -52,6 +55,25 @@ def initialize_system():
         logger.warning("Failed to get frequency, session initialized without frequency")
 
 
+def cleanup():
+    """Cleanup function to be called when the application exits."""
+    logger.info("Cleaning up before exit")
+    try:
+        # First, reset terminal settings to ensure they're restored properly
+        chat_interface.reset_terminal()
+
+        # Then stop the audio stream processing
+        stream_groq_whisper.stop_audio_stream()
+
+        # Add a small sleep to ensure cleanup messages are displayed
+        time.sleep(0.1)
+
+        # Print a final message to confirm cleanup is complete
+        print("\nTerminal settings restored. Application exited cleanly.")
+    except Exception as e:
+        logger.error(f"Error during cleanup: {e}")
+
+
 def main():
     """Main function to run the application."""
     logger.info("Starting SIGINT Agent Application")
@@ -60,7 +82,21 @@ def main():
         # Initialize system (database and initial frequency)
         initialize_system()
 
+        # Register cleanup function to be called on exit
+        atexit.register(cleanup)
+
+        # Set up signal handlers for more reliable cleanup
+        import signal
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            signal.signal(sig, lambda signum, frame: sys.exit(0))
+
+        # Start the audio stream processing in a background thread
+        logger.info("Starting audio stream processing")
+        audio_thread = stream_groq_whisper.run_audio_stream()
+        logger.info("Audio stream processing started")
+
         # Run the chat interface (main thread)
+        logger.info("Starting chat interface")
         chat_interface.run()
 
     except Exception as e:
@@ -68,6 +104,8 @@ def main():
         print(f"Fatal error: {e}")
     finally:
         logger.info("SIGINT Agent Application shutting down")
+        # Ensure cleanup is called (in case atexit doesn't trigger)
+        cleanup()
 
 
 if __name__ == "__main__":

@@ -8,26 +8,13 @@ import logging
 
 from groq import Groq
 import database
-import gqrx_client as gqrx
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler("sigint_agent.log")
-    ]
-)
+# Configure logging - don't set handlers here since app.py already configures them
 logger = logging.getLogger("sigint_audio_stream")
 
 client = Groq()
 
 audio_queue = queue.Queue()
-
-# Initialize the database using our new module
-database.initialize_db()
-logger.info("Database initialized")
 
 # 30 seconds of 16kHZ:
 # sample_rate(16000 samples/sec) * 30 sec * 2 bytes/sample
@@ -106,8 +93,73 @@ def process_audio(in_data, index=0, capture_time=None):
             logger.error(f"Failed to save transcript to database: {e}")
 
 
+# Global variable to track the audio stream thread
+audio_stream_thread = None
+ffmpeg_process = None
+
+def run_audio_stream():
+    """Main function to run the audio stream processing in a background thread.
+    This function is meant to be called from app.py."""
+    global audio_stream_thread
+
+    # Create and start the thread if it doesn't exist already
+    if audio_stream_thread is None or not audio_stream_thread.is_alive():
+        audio_stream_thread = threading.Thread(
+            target=run_ffmpeg, 
+            daemon=True,  # Set as daemon so it exits when the main thread exits
+            name="AudioStreamThread"
+        )
+        audio_stream_thread.start()
+        logger.info("Audio stream thread started")
+    else:
+        logger.warning("Audio stream thread is already running")
+
+    return audio_stream_thread
+
+
+def stop_audio_stream():
+    """Stop the audio stream processing.
+    This function is meant to be called from app.py during shutdown."""
+    global audio_stream_thread, ffmpeg_process
+
+    logger.info("Stopping audio stream...")
+
+    # Signal the audio worker to stop
+    if audio_queue.qsize() > 0:
+        logger.info(f"Clearing audio queue ({audio_queue.qsize()} items)...")
+        while not audio_queue.empty():
+            try:
+                audio_queue.get_nowait()
+                audio_queue.task_done()
+            except queue.Empty:
+                break
+
+    # Add None to queue to stop the audio worker
+    audio_queue.put(None)
+
+    # Terminate the FFmpeg process if it's running
+    if ffmpeg_process is not None:
+        logger.info("Terminating FFmpeg process...")
+        try:
+            ffmpeg_process.terminate()
+            ffmpeg_process.wait(timeout=5)
+        except Exception as e:
+            logger.error(f"Error terminating FFmpeg process: {e}")
+
+    # Wait for the thread to finish if it's running
+    if audio_stream_thread is not None and audio_stream_thread.is_alive():
+        logger.info("Waiting for audio stream thread to finish...")
+        audio_stream_thread.join(timeout=5)
+        if audio_stream_thread.is_alive():
+            logger.warning("Audio stream thread did not finish in time")
+
+    logger.info("Audio stream stopped")
+
+
 def run_ffmpeg():
     logger.info("Starting FFmpeg processing pipeline")
+    global ffmpeg_process
+
     worker_thread = threading.Thread(target=audio_worker,
                                      daemon=True)
     worker_thread.start()
@@ -163,7 +215,7 @@ def run_ffmpeg():
 
     # Merge the outputs and run asynchronously
     logger.info("Starting FFmpeg process")
-    process = ffmpeg.merge_outputs(output1, output2).run_async(
+    ffmpeg_process = ffmpeg.merge_outputs(output1, output2).run_async(
         pipe_stdout=True,
         pipe_stderr=True
     )
@@ -177,7 +229,7 @@ def run_ffmpeg():
     # Read and process audio data from stdout
     try:
         while True:
-            in_bytes = process.stdout.read(2)
+            in_bytes = ffmpeg_process.stdout.read(2)
             if not in_bytes:
                 if accumulated:
                     logger.debug(f"Processing final accumulated chunk ({len(accumulated)} bytes)")
@@ -199,31 +251,12 @@ def run_ffmpeg():
         logger.error(f"Error occurred during FFmpeg processing: {e}", exc_info=True)
     finally:
         logger.info("Cleaning up FFmpeg process")
-        process.stdout.close()
-        process.stderr.close()
-        process.wait()
+        if ffmpeg_process:
+            ffmpeg_process.stdout.close()
+            ffmpeg_process.stderr.close()
+            ffmpeg_process.wait()
 
         logger.info("Stopping audio worker thread")
         audio_queue.put(None)
         worker_thread.join()
         logger.info(f"Processing completed, processed {chunk_index} chunks")
-
-
-if __name__ == '__main__':
-    logger.info("SIGINT Audio Stream starting up")
-    frequency = None
-    try:
-        logger.info("Getting current frequency from GQRX")
-        frequency = gqrx.send("f")
-    except Exception as e:
-        logger.error(f"Error getting current frequency: {e}")
-    finally:
-        gqrx.close()
-
-    if frequency:
-        database.save_session(frequency)
-        logger.info(f"Initialized session with frequency: {frequency}")
-
-    # Run the ffmpeg process in a separate thread
-    run_ffmpeg()
-    logger.info("SIGINT Audio Stream shutting down")
