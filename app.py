@@ -1,60 +1,151 @@
-from langchain_groq import ChatGroq
-from langchain.tools import tool
+import threading
+import logging
+import sys
+import os
 
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.prebuilt import create_react_agent
+# Import modules from our application
+import database
+import gqrx_client as gqrx
 
+# Configure logging - do this before any other imports that might configure logging
+# First, remove all existing handlers to ensure clean configuration
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
 
-# LangGraph Memory
-memory = MemorySaver()
+# Configure a file handler
+file_handler = logging.FileHandler("sigint_agent.log")
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
 
+# Configure the root logger
+logging.root.setLevel(logging.INFO)
+logging.root.addHandler(file_handler)
 
-@tool
-def gqrx_sweep(min_range: int,
-               max_range: int) -> [float]:
-    """
-    Performs a sweep scan of the range frequency to find most
-    active stations. Returns a list of the frequencies found
-    in MHz.
-    """
-    return [
-        459.190,
-        457.615,
-        457.277,
-    ]
+# Now import modules that might also configure logging
+from agent import run as run_agent
 
-
-def load_text_file(file_path):
-    with open(file_path, "r", encoding="utf-8") as file:
-        content = file.read()
-
-    return content
+logger = logging.getLogger("sigint_app")
 
 
-def init_graph():
-    llm = ChatGroq(
-        model_name="llama-3.3-70b-versatile")
-    main_prompt = load_text_file("prompts/main.txt")
+def initialize_system():
+    """Initialize the system by setting up the database and getting the current frequency."""
+    logger.info("Initializing system")
 
-    tools = [gqrx_sweep]
+    # Initialize database
+    database.initialize_db()
+    logger.info("Database initialized")
 
-    return create_react_agent(llm,
-                              tools,
-                              checkpointer=memory,
-                              state_modifier=main_prompt)
+    # Get current frequency from GQRX and create a session
+    frequency = None
+    try:
+        logger.info("Getting current frequency from GQRX")
+        frequency = gqrx.send("f")
+        gqrx.close()
+    except Exception as e:
+        logger.error(f"Error getting current frequency: {e}")
+        gqrx.close()
+
+    if frequency:
+        database.save_session(frequency)
+        logger.info(f"Initialized session with frequency: {frequency}")
+    else:
+        logger.warning("Failed to get frequency, session initialized without frequency")
 
 
-user_id = "sigint1"
+def run_chat_interface():
+    """Run the chat-like interface in the terminal."""
+    logger.info("Starting chat interface")
+    print("\n==== SIGINT Agent Chat Interface ====")
+    print("Type '.exit' or '.quit' to end the session")
+    print("======================================\n")
 
-graph = init_graph()
+    # Use a different approach to get input that won't be affected by ffmpeg
+    import select
+    import termios
+    import tty
 
-input_message_use_case_1 = "Find any frequency where human conversation is happening in the ranges: 456MHz - 460MHz"  # noqa
+    # Save terminal settings
+    old_settings = termios.tcgetattr(sys.stdin)
+    try:
+        while True:
+            # Print prompt
+            sys.stdout.write("\nYou: ")
+            sys.stdout.flush()
 
-# TODO: requires plan-execute agent architecture
-# input_message_use_case_2 = "Find frequencies where anyone is discussing or talking about a library in the ranges: 456000.000kHz - 460000.000kHz"  # noqa
+            # Collect input
+            user_input = ""
 
-response = graph.invoke(
-    {"messages": [("user", input_message_use_case_1)]},
-    config={"configurable": {"thread_id": user_id}})
+            # Set terminal to raw mode to read characters one by one
+            tty.setraw(sys.stdin.fileno())
 
-print(response, flush=True)
+            while True:
+                # Check if there's input ready to be read
+                if select.select([sys.stdin], [], [], 0)[0]:
+                    char = sys.stdin.read(1)
+
+                    # Handle special keys
+                    if ord(char) == 3:  # Ctrl+C
+                        raise KeyboardInterrupt
+
+                    # Handle Enter key
+                    if char == '\r' or char == '\n':
+                        sys.stdout.write('\n')
+                        sys.stdout.flush()
+                        break
+
+                    # Handle backspace
+                    if ord(char) == 127:
+                        if user_input:
+                            user_input = user_input[:-1]
+                            sys.stdout.write('\b \b')  # Erase character
+                            sys.stdout.flush()
+                    else:
+                        user_input += char
+                        sys.stdout.write(char)
+                        sys.stdout.flush()
+
+                # Yield to other threads, prevents CPU hogging
+                import time
+                time.sleep(0.01)
+
+            # Restore terminal settings for normal processing
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+
+            # Check for exit command
+            if user_input.lower() in ['.exit', '.quit']:
+                print("Exiting application...")
+                break
+
+            # Process the user's message using the agent
+            response = run_agent(user_input)
+            print(f"\nAgent: {response}")
+
+    except KeyboardInterrupt:
+        print("\nReceived keyboard interrupt. Exiting application...")
+    except Exception as e:
+        logger.error(f"Error in chat interface: {e}", exc_info=True)
+        print(f"\nAn error occurred: {e}")
+    finally:
+        # Restore terminal settings
+        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+
+
+def main():
+    """Main function to run the application."""
+    logger.info("Starting SIGINT Agent Application")
+
+    try:
+        # Initialize system (database and initial frequency)
+        initialize_system()
+
+        # Run the chat interface (main thread)
+        run_chat_interface()
+
+    except Exception as e:
+        logger.error(f"Fatal error in main application: {e}", exc_info=True)
+        print(f"Fatal error: {e}")
+    finally:
+        logger.info("SIGINT Agent Application shutting down")
+
+
+if __name__ == "__main__":
+    main()

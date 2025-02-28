@@ -6,15 +6,7 @@ import logging
 from database import save_session
 import gqrx_client as gqrx
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler("sigint_agent.log")
-    ]
-)
+# Get logger for this module
 logger = logging.getLogger("sigint_agent")
 
 groq = Groq()
@@ -155,8 +147,3 @@ def run(message: str):
     
     logger.info("Received direct response from GROQ API (no tool calls)")
     return response_message.content
-
-if __name__ == "__main__":
-    logger.info("SIGINT Agent starting")
-    result = run("What is the current frequency?")
-    logger.info(f"Result: {result[:100]}..." if len(result) > 100 else f"Result: {result}")
