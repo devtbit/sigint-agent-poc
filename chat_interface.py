@@ -13,9 +13,32 @@ logger = logging.getLogger("chat_interface")
 def run():
     """Run the chat-like interface in the terminal."""
     logger.info("Starting chat interface")
-    print("\n==== SIGINT Agent Chat Interface ====")
+
+    sigint_ascii = """
+============================================================       
+ .d8888b.  8888888 .d8888b.  8888888 888b    888 88888888888 
+d88P  Y88b   888  d88P  Y88b   888   8888b   888     888     
+Y88b.        888  888    888   888   88888b  888     888     
+ "Y888b.     888  888          888   888Y88b 888     888     
+    "Y88b.   888  888  88888   888   888 Y88b888     888     
+      "888   888  888    888   888   888  Y88888     888     
+Y88b  d88P   888  Y88b  d88P   888   888   Y8888     888     
+ "Y8888P"  8888888 "Y8888P"  8888888 888    Y888     888     
+                                                             
+       d8888  .d8888b.  8888888888 888b    888 88888888888    
+      d88888 d88P  Y88b 888        8888b   888     888        
+     d88P888 888    888 888        88888b  888     888        
+    d88P 888 888        8888888    888Y88b 888     888        
+   d88P  888 888  88888 888        888 Y88b888     888        
+  d88P   888 888    888 888        888  Y88888     888        
+ d8888888888 Y88b  d88P 888        888   Y8888     888        
+d88P     888  "Y8888P"  8888888888 888    Y888     888 
+============================================================       
+                                                      v0.1.0
+"""
+    print(sigint_ascii)
     print("Type '.exit' or '.quit' to end the session")
-    print("======================================\n")
+    print("============================================================\n")
 
     # Save terminal settings
     old_settings = termios.tcgetattr(sys.stdin)
