@@ -2,27 +2,21 @@ import socket
 import os
 import logging
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler("gqrx_client.log")
-    ]
-)
+# Get logger for this module
 logger = logging.getLogger('gqrx_client')
 
 gqrx_host = os.environ['GQRX_HOST']
 
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sock.settimeout(5)  # Set a 5-second timeout
+# Move socket creation into the connect function
 connected = False
+sock = None
 
 
 def connect():
-    global connected
+    global connected, sock
+    # Create a new socket each time we connect
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(5)  # Set a 5-second timeout
     try:
         sock.connect((gqrx_host, 7356))
         connected = True
@@ -33,13 +27,14 @@ def connect():
 
 
 def close():
-    global connected
-    sock.close()
+    global connected, sock
+    if sock:
+        sock.close()
     connected = False
     logger.info("Connection closed")
 
 def send(command: str) -> str:
-    global connected
+    global connected, sock
     if not connected:
         connect()
 
