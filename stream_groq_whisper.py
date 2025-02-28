@@ -19,6 +19,9 @@ audio_queue = queue.Queue()
 # sample_rate(16000 samples/sec) * 30 sec * 2 bytes/sample
 CHUNK_SIZE = 10 * 16000 * 2
 
+# Global variable to store the current resampled audio filename
+current_resampled_filename = None
+
 
 def audio_worker():
     logger.info("Audio worker thread started")
@@ -34,12 +37,12 @@ def audio_worker():
 
         # Unpack the item to include capture_time
         in_data, index, capture_time = item
-        process_audio(in_data, index, capture_time)
+        process_audio(in_data, index, capture_time, current_resampled_filename)
         processed_chunks += 1
         audio_queue.task_done()
 
 
-def process_audio(in_data, index=0, capture_time=None):
+def process_audio(in_data, index=0, capture_time=None, source_file=None):
     # Process the audio data here
     frequency = database.get_current_session().frequency
     logger.debug(
@@ -90,6 +93,7 @@ def process_audio(in_data, index=0, capture_time=None):
                 text=transcription.text,
                 frequency=frequency,
                 timestamp=capture_time,
+                source_file=source_file,
             )
 
             logger.debug(
@@ -166,7 +170,7 @@ def stop_audio_stream():
 
 def run_ffmpeg():
     logger.info("Starting FFmpeg processing pipeline")
-    global ffmpeg_process
+    global ffmpeg_process, current_resampled_filename
 
     worker_thread = threading.Thread(target=audio_worker,
                                      daemon=True)
@@ -184,6 +188,9 @@ def run_ffmpeg():
     # Create filename with timestamp prefix (only resampled audio)
     resampled_filename = os.path.join(
         sessions_dir, f"{timestamp}_resampled.wav")
+
+    # Store the filename in the global variable
+    current_resampled_filename = resampled_filename
 
     logger.info(f"Recording session: {timestamp}")
     logger.info(f"Saving resampled audio to: {resampled_filename}")

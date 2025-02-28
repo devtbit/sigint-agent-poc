@@ -24,6 +24,7 @@ class Transcript(Model):
     timestamp = DateTimeField(default=datetime.datetime.now())
     text = CharField(null=False)
     frequency = CharField(null=True)
+    source_file = CharField(null=True)
 
     class Meta:
         database = db
@@ -52,13 +53,14 @@ def initialize_db():
         save_session("unknown")
 
 
-def save_transcript(text, frequency, timestamp=None):
+def save_transcript(text, frequency, timestamp=None, source_file=None):
     """Save a transcript to the database.
 
     Args:
         text (str): The transcribed text
         frequency (str): The frequency when the transcript was recorded
         timestamp (datetime, optional): When the audio was captured
+        source_file (str, optional): The name of the source audio file
 
     Returns:
         Transcript: The saved transcript instance
@@ -69,6 +71,7 @@ def save_transcript(text, frequency, timestamp=None):
         text=text,
         timestamp=timestamp or datetime.datetime.now(),
         frequency=frequency,
+        source_file=source_file,
     )
     t.save()
     return t
