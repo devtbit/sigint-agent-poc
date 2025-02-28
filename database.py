@@ -104,7 +104,7 @@ def get_last_transcripts(frequency, last_minutes=5):
     """
     cutoff = datetime.datetime.now() - datetime.timedelta(minutes=last_minutes)
     return Transcript.select().where(
-        (Transcript.frequency == frequency) & (Transcript.timestamp < cutoff)
+        (Transcript.frequency == frequency) & (Transcript.timestamp > cutoff)
     )
 
 
