@@ -3,7 +3,7 @@ import json
 import os
 import logging
 
-from database import save_session
+from database import save_session, get_last_transcripts
 import gqrx_client as gqrx
 
 # Get logger for this module
@@ -51,6 +51,24 @@ tools = [
                 "required": []
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_last_10_minutes",
+            "description": "Get the last 10 minutes of transcripts for "
+                           "a given frequency.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "frequency": {
+                        "type": "integer",
+                        "description": "The frequency to get transcripts for."
+                    }
+                },
+                "required": ["frequency"]
+            }
+        }
     }
 ]
 logger.debug("Initialized available tools")
@@ -96,6 +114,32 @@ def get_current_frequency():
     return result
 
 
+def get_last_10_minutes(frequency: int):
+    """Get the last 10 minutes of transcripts for a given frequency."""
+    logger.info(
+        "Getting last 10 minutes of transcripts for frequency: "
+        f"{frequency} Hz")
+    result = None
+    try:
+        transcripts = get_last_transcripts(frequency, 10)
+        logger.info(f"Found {len(transcripts)} transcripts")
+        result = json.dumps({
+            "result": [
+                {
+                    "timestamp": transcript.timestamp.isoformat(),
+                    "text": transcript.text
+                }
+                for transcript in transcripts
+            ]
+        })
+    except Exception as e:
+        logger.error(
+            "Error getting last 10 minutes of transcripts: "
+            f"{e}", exc_info=True)
+        result = json.dumps({"error": str(e)})
+    return result
+
+
 def run(message: str):
     msg_preview = message[:50] + "..." if len(message) > 50 else message
     logger.info(f"Processing message: {msg_preview}")
@@ -118,7 +162,8 @@ def run(message: str):
         logger.info(f"Received tool calls: {len(tool_calls)}")
         available_tools = {
             "set_frequency": set_frequency,
-            "get_current_frequency": get_current_frequency
+            "get_current_frequency": get_current_frequency,
+            "get_last_10_minutes": get_last_10_minutes
         }
 
         for tool_call in tool_calls:

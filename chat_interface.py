@@ -115,7 +115,7 @@ d88P     888  "Y8888P"  8888888888 888    Y888     888
 
             # Process the user's message using the agent
             response = run_agent(user_input)
-            print(f"\nAgent: {response}")
+            print(f"\nOperator: {response}")
 
     except KeyboardInterrupt:
         print("\nReceived keyboard interrupt. Exiting application...")

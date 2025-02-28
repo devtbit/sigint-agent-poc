@@ -1,6 +1,6 @@
 # SIGINT Agent
 
-A sophisticated signal intelligence agent that captures, transcribes, and analyzes radio communications through an interactive chat interface. This proof-of-concept application connects to a GQRX software-defined radio receiver to monitor and control frequencies, transcribes audio in real-time using Groq's Whisper model, and provides an AI-powered chat interface for interacting with the captured data.
+A simple SIGINT agent that captures, transcribes, and analyzes radio communications through an interactive chat interface. This proof-of-concept application connects to a GQRX software-defined radio receiver to monitor and control frequencies, transcribes audio in real-time using Groq's Whisper model, and provides an AI-powered chat interface for interacting with the captured data.
 
 ![SIGINT Agent](https://dummyimage.com/800x400/000/fff&text=SIGINT+Agent)
 

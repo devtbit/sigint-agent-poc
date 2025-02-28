@@ -74,6 +74,37 @@ def save_transcript(text, frequency, timestamp=None):
     return t
 
 
+def get_transcripts(frequency, max_results=100):
+    """Get all transcripts for a given frequency.
+
+    Args:
+        frequency (str): The frequency to filter transcripts by
+        max_results (int, optional): The maximum number of results to return
+
+    Returns:
+        list: A list of Transcript instances
+    """
+    return Transcript.select() \
+        .where(Transcript.frequency == frequency) \
+        .limit(max_results)
+
+
+def get_last_transcripts(frequency, last_minutes=5):
+    """Get the last 5 minutes of transcripts for a given frequency.
+
+    Args:
+        frequency (str): The frequency to filter transcripts by
+        last_minutes (int, optional): The number of minutes to look back
+
+    Returns:
+        list: A list of Transcript instances
+    """
+    cutoff = datetime.datetime.now() - datetime.timedelta(minutes=last_minutes)
+    return Transcript.select().where(
+        (Transcript.frequency == frequency) & (Transcript.timestamp < cutoff)
+    )
+
+
 def save_session(frequency):
     """Save a session to the database. Deactivate any existing session.
 
