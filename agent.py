@@ -3,7 +3,7 @@ import json
 import os
 import logging
 
-from database import save_session, get_last_transcripts
+from database import save_session, get_last_transcripts, get_transcripts
 import gqrx_client as gqrx
 
 # Get logger for this module
@@ -64,6 +64,24 @@ tools = [
                     "frequency": {
                         "type": "integer",
                         "description": "The frequency to get transcripts for."
+                    }
+                },
+                "required": ["frequency"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_frequency_summary",
+            "description": "Get a summary of the intercepted communications "
+                           "for a given frequency.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "frequency": {
+                        "type": "integer",
+                        "description": "The frequency to get a summary for."
                     }
                 },
                 "required": ["frequency"]
@@ -140,6 +158,62 @@ def get_last_10_minutes(frequency: int):
     return result
 
 
+def get_frequency_summary(frequency: int):
+    """
+    Get a summary of the intercepted communications
+    for a given frequency.
+    """
+    logger.info(f"Getting summary for frequency: {frequency} Hz")
+    result = None
+    try:
+        transcripts = get_transcripts(frequency, 250)
+        logger.info(f"Found {len(transcripts)} transcripts for summarization")
+        summary = summarize_transcripts(transcripts)
+        logger.info(f"Summary: {summary}")
+        if summary:
+            result = json.dumps({"result": summary})
+        else:
+            result = json.dumps({"error": "No summary found"})
+    except Exception as e:
+        logger.error(f"Error getting summary: {e}", exc_info=True)
+        result = json.dumps({"error": str(e)})
+    return result
+
+
+def summarize_transcripts(transcripts: list):
+    """Summarize the intercepted communications."""
+    logger.info("Summarizing transcripts")
+    summary = None
+    try:
+        # Load the summarization prompt
+        with open("prompts/summarization.txt", "r") as f:
+            summarization_prompt = f.read()
+
+        # Create a list of transcripts for the prompt
+        transcripts_list = [
+            f"[{i+1}] {t.text}"
+            for i, t in enumerate(transcripts)
+        ]
+        transcripts_str = "\n".join(transcripts_list)
+
+        # Create the prompt
+        prompt = summarization_prompt.format(transcripts=transcripts_str)
+
+        # Send the prompt to GROQ
+        response = groq.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": prompt}],
+            max_tokens=4096,
+        )
+
+        # Get the summary from the response
+        summary = response.choices[0].message.content
+        logger.info(f"Summary: {summary}")
+    except Exception as e:
+        logger.error(f"Error summarizing transcripts: {e}", exc_info=True)
+    return summary
+
+
 def run(message: str):
     msg_preview = message[:50] + "..." if len(message) > 50 else message
     logger.info(f"Processing message: {msg_preview}")
@@ -163,7 +237,8 @@ def run(message: str):
         available_tools = {
             "set_frequency": set_frequency,
             "get_current_frequency": get_current_frequency,
-            "get_last_10_minutes": get_last_10_minutes
+            "get_last_10_minutes": get_last_10_minutes,
+            "get_frequency_summary": get_frequency_summary
         }
 
         for tool_call in tool_calls:
