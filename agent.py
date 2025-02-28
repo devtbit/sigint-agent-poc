@@ -106,6 +106,8 @@ def run(message: str):
     )
     
     response_message = response.choices[0].message
+    messages.append(response_message)
+
     tool_calls = response_message.tool_calls
     if tool_calls:
         logger.info(f"Received tool calls: {len(tool_calls)}")
@@ -113,8 +115,6 @@ def run(message: str):
             "set_frequency": set_frequency,
             "get_current_frequency": get_current_frequency
         }
-
-        messages.append(response_message)
 
         for tool_call in tool_calls:
             tool_name = tool_call.function.name
