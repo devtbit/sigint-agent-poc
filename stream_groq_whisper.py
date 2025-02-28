@@ -121,12 +121,10 @@ def run_ffmpeg():
     # Generate timestamp for the session
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    # Create filenames with timestamp prefix
-    output_filename = os.path.join(sessions_dir, f"{timestamp}_output.wav")
+    # Create filename with timestamp prefix (only resampled audio)
     resampled_filename = os.path.join(sessions_dir, f"{timestamp}_resampled.wav")
     
     logger.info(f"Recording session: {timestamp}")
-    logger.info(f"Saving original audio to: {output_filename}")
     logger.info(f"Saving resampled audio to: {resampled_filename}")
 
     # Define the input stream
@@ -138,32 +136,24 @@ def run_ffmpeg():
         ac='1'
     )
 
-    # Split the audio stream into two streams
-    split_stream = input_stream.filter_multi_output('asplit', 2)
-    stream_to_file = split_stream.stream(0)
-    stream_to_process = split_stream[1]
-
-    # Resample the 'stream_to_process' from 48kHz to 16kHz
-    resampled_stream = stream_to_process.filter(
+    # Resample the input stream from 48kHz to 16kHz
+    resampled_stream = input_stream.filter(
         'aresample',
         resampler='soxr',
         sample_rate='16000')
 
-    # Split the resampled stream again
-    multi_resampled_stream = resampled_stream.filter_multi_output(
+    # Split the resampled stream 
+    split_resampled_stream = resampled_stream.filter_multi_output(
         'asplit', 2)
-    multi_stream_to_file = multi_resampled_stream.stream(0)
-    multi_stream_to_process = multi_resampled_stream[1]
+    stream_to_file = split_resampled_stream.stream(0)
+    stream_to_process = split_resampled_stream[1]
 
-    # Define the first output to save the original audio with timestamp prefix
-    output1 = ffmpeg.output(stream_to_file, output_filename)
+    # Define the output to save the resampled audio with timestamp prefix
+    output1 = ffmpeg.output(stream_to_file, resampled_filename)
 
-    # Define the second output to save the resampled audio with timestamp prefix
-    output2 = ffmpeg.output(multi_stream_to_file, resampled_filename)
-
-    # Define the second output to pipe (stdout) the resampled audio
-    output3 = ffmpeg.output(
-        multi_stream_to_process,
+    # Define the output to pipe (stdout) the resampled audio
+    output2 = ffmpeg.output(
+        stream_to_process,
         'pipe:',
         format='s16le',
         acodec='pcm_s16le',
@@ -171,9 +161,9 @@ def run_ffmpeg():
         ac='1'
     )
 
-    # Merge the two outputs and run asynchronously
+    # Merge the outputs and run asynchronously
     logger.info("Starting FFmpeg process")
-    process = ffmpeg.merge_outputs(output1, output2, output3).run_async(
+    process = ffmpeg.merge_outputs(output1, output2).run_async(
         pipe_stdout=True,
         pipe_stderr=True
     )
