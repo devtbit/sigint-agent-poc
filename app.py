@@ -4,6 +4,7 @@ import sys
 import os
 import atexit
 import time
+import datetime
 
 # Import modules from our application
 import database
@@ -16,8 +17,17 @@ import stream_groq_whisper
 for handler in logging.root.handlers[:]:
     logging.root.removeHandler(handler)
 
+# Create logs directory if it doesn't exist
+logs_dir = "logs"
+if not os.path.exists(logs_dir):
+    os.makedirs(logs_dir)
+
+# Generate timestamp for the log file
+timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+log_filename = os.path.join(logs_dir, f"{timestamp}_sigint_agent.log")
+
 # Configure a file handler
-file_handler = logging.FileHandler("sigint_agent.log")
+file_handler = logging.FileHandler(log_filename)
 file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
 
 # Configure the root logger
@@ -28,6 +38,7 @@ logging.root.addHandler(file_handler)
 from agent import run as run_agent
 
 logger = logging.getLogger("sigint_app")
+logger.info(f"Logging to: {log_filename}")
 
 
 def initialize_system():
