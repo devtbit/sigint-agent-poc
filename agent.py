@@ -10,6 +10,7 @@ logger = logging.getLogger("sigint_agent")
 
 groq = Groq()
 model = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+temperature = 0.5
 logger.info(f"Using GROQ model: {model}")
 
 messages = [
@@ -37,6 +38,7 @@ def run(message: str, stream_handler=None):
             tool_choice="auto",
             max_tokens=4096,
             stream=True,
+            temperature=temperature,
         )
 
         # Process streaming response
@@ -51,6 +53,7 @@ def run(message: str, stream_handler=None):
             tools=tool_definitions,
             tool_choice="auto",
             max_tokens=4096,
+            temperature=temperature,
         )
 
         response_message = response.choices[0].message
@@ -81,6 +84,7 @@ def run(message: str, stream_handler=None):
                 model=model,
                 messages=messages,
                 max_tokens=4096,
+                temperature=temperature,
             )
 
             response_message = response.choices[0].message
@@ -173,6 +177,7 @@ def process_streaming_response(response_stream, stream_handler):
             messages=messages,
             max_tokens=4096,
             stream=True,
+            temperature=temperature,
         )
 
         # Stream the follow-up response

@@ -19,8 +19,8 @@ client = Groq()
 audio_queue = queue.Queue()
 
 # 30 seconds of 16kHZ:
-# sample_rate(16000 samples/sec) * 20 sec * 2 bytes/sample
-CHUNK_SIZE = 15 * 16000 * 2
+# sample_rate(16000 samples/sec) * 30 sec * 2 bytes/sample
+CHUNK_SIZE = 30 * 16000 * 2
 
 # Global variable to store the current resampled audio filename
 current_resampled_filename = None
@@ -29,11 +29,11 @@ current_resampled_filename = None
 def is_audio_silent(wav_bytes, silence_threshold=150.0):
     """
     Determine if the audio data is silent based on RMS amplitude.
-    
+
     Args:
         wav_bytes: WAV file data as bytes
         silence_threshold: RMS threshold below which audio is considered silent
-        
+
     Returns:
         is_silent: bool, True if audio is silent, False otherwise
         rms: float, the calculated RMS value (useful for logging)
@@ -46,13 +46,14 @@ def is_audio_silent(wav_bytes, silence_threshold=150.0):
                 frames = wav_file.getnframes()
                 audio_data = wav_file.readframes(frames)
                 audio_array = np.frombuffer(audio_data, dtype=np.int16)
-                
+
                 # Calculate RMS (Root Mean Square) of the audio signal
-                rms = np.sqrt(np.mean(np.square(audio_array.astype(np.float32))))
-                
+                rms = np.sqrt(np.mean(np.square(
+                    audio_array.astype(np.float32))))
+
                 # Determine if silent based on threshold
                 is_silent = rms < silence_threshold
-                
+
                 return is_silent, rms
     except Exception as e:
         # If there's an error, assume it's not silent to be safe
@@ -112,10 +113,14 @@ def process_audio(in_data, index=0, capture_time=None, source_file=None):
     # Check if the audio is silent to avoid unnecessary API calls
     is_silent, rms = is_audio_silent(wav_bytes)
     if is_silent:
-        logger.info(f"Chunk {index} detected as silence (RMS: {rms:.2f}), skipping transcription")
+        logger.info(
+            f"Chunk {index} detected as silence "
+            f"(RMS: {rms:.2f}), skipping transcription")
         return
-    
-    logger.debug(f"Chunk {index} contains audio (RMS: {rms:.2f}), proceeding with transcription")
+
+    logger.debug(
+        f"Chunk {index} contains audio "
+        f"(RMS: {rms:.2f}), proceeding with transcription")
 
     logger.debug(f"Sending chunk {index} to Groq Whisper API")
     transcription = client.audio.transcriptions.create(
