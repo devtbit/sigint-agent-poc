@@ -20,7 +20,7 @@ audio_queue = queue.Queue()
 
 # 30 seconds of 16kHZ:
 # sample_rate(16000 samples/sec) * 20 sec * 2 bytes/sample
-CHUNK_SIZE = 20 * 16000 * 2
+CHUNK_SIZE = 15 * 16000 * 2
 
 # Global variable to store the current resampled audio filename
 current_resampled_filename = None

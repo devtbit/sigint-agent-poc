@@ -30,6 +30,12 @@ def reset_terminal():
             logger.error(f"Error resetting terminal: {e}")
 
 
+def stream_output(text_chunk):
+    """Handle streaming output from the agent."""
+    sys.stdout.write(text_chunk)
+    sys.stdout.flush()
+
+
 def run():
     """Run the chat-like interface in the terminal."""
     global old_settings
@@ -113,9 +119,13 @@ d88P     888  "Y8888P"  8888888888 888    Y888     888
                 print("Exiting application...")
                 break
 
-            # Process the user's message using the agent
-            response = run_agent(user_input)
-            print(f"\nOperator: {response}")
+            # Process the user's message using the agent with streaming
+            sys.stdout.write("\nOperator: ")
+            sys.stdout.flush()
+            run_agent(user_input, stream_handler=stream_output)
+            # Add a new line after the streaming response
+            sys.stdout.write("\n")
+            sys.stdout.flush()
 
     except KeyboardInterrupt:
         print("\nReceived keyboard interrupt. Exiting application...")
