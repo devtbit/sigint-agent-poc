@@ -17,7 +17,7 @@ audio_queue = queue.Queue()
 
 # 30 seconds of 16kHZ:
 # sample_rate(16000 samples/sec) * 30 sec * 2 bytes/sample
-CHUNK_SIZE = 10 * 16000 * 2
+CHUNK_SIZE = 20 * 16000 * 2
 
 # Global variable to store the current resampled audio filename
 current_resampled_filename = None
@@ -168,6 +168,28 @@ def stop_audio_stream():
     logger.info("Audio stream stopped")
 
 
+# Add a function to continuously read from stderr to prevent buffer filling up
+def stderr_reader(process):
+    """
+    Read from stderr in a separate thread to prevent buffer from filling up.
+    """
+    logger.info("FFmpeg stderr reader thread started")
+    while True:
+        try:
+            line = process.stderr.readline()
+            if not line:
+                logger.info("FFmpeg stderr closed, exiting reader thread")
+                break
+            # Log any non-empty output at debug level
+            line_str = line.decode('utf-8', errors='replace').strip()
+            if line_str:
+                logger.debug(f"FFmpeg: {line_str}")
+        except Exception as e:
+            logger.error(f"Error reading FFmpeg stderr: {e}")
+            break
+    logger.info("FFmpeg stderr reader thread stopped")
+
+
 def run_ffmpeg():
     logger.info("Starting FFmpeg processing pipeline")
     global ffmpeg_process, current_resampled_filename
@@ -235,6 +257,14 @@ def run_ffmpeg():
         pipe_stdout=True,
         pipe_stderr=True
     )
+
+    # Start stderr reader thread to prevent buffer filling up
+    stderr_thread = threading.Thread(
+        target=stderr_reader,
+        args=(ffmpeg_process,),
+        daemon=True
+    )
+    stderr_thread.start()
 
     accumulated = b''
     chunk_index = 0
